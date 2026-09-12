@@ -340,6 +340,15 @@ async function processRecords(records) {
         }
     }
     stmt.finalize();
+
+    // Dual-Write to PostgreSQL Salesforce Clone on sicsappsina6:5433
+    try {
+        const pgDb = require('./db-postgres');
+        pgDb.upsertTasksBatch(records)
+            .then(count => { if (count > 0) console.log(`[Postgres ODS] Synced ${count} tasks to sicsappsina6:5433.`); })
+            .catch(err => console.warn('[Postgres ODS] Sync error:', err.message));
+    } catch (e) {}
+
     return newlyInsertedCareTasks;
 }
 

@@ -7,7 +7,7 @@ RUN npm install -g @salesforce/cli
 
 COPY package*.json ./
 
-RUN npm ci --only=production --build-from-source
+RUN npm install --only=production --build-from-source
 
 COPY . .
 

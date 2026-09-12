@@ -1742,6 +1742,15 @@ app.post('/api/tasks/reassign', async (req, res) => {
     sfDb.close();
     queryCache.clear();
 
+    // Instant Write-Through to PostgreSQL Salesforce Clone on sicsappsina6:5433
+    try {
+      const pgDb = require('./db-postgres');
+      pgDb.query(
+        'UPDATE tasks SET assigned = $1, bounce_count = COALESCE(bounce_count, 0) + 1, last_modified_date = NOW() WHERE task_number = ANY($2)',
+        [newAssignee, taskNumbers]
+      ).catch(err => console.warn('[Postgres ODS Reassign] Write-through error:', err.message));
+    } catch (e) {}
+
     res.json({
       status: 'ok',
       reassignedCount: taskNumbers.length,
