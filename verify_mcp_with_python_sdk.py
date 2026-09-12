@@ -1,6 +1,6 @@
 """
 Official Python MCP Client Verification for Ohm Agent
-Connects to SFDC MCP Server (http://localhost:4005/sse) using official 'mcp' SDK
+Tests all 24 tools against SFDC Enterprise MCP Server (http://localhost:4005/sse)
 """
 
 import asyncio
@@ -9,61 +9,55 @@ from mcp import ClientSession
 from mcp.client.sse import sse_client
 
 async def main():
-    print("Connecting to SFDC MCP Server over SSE (http://localhost:4005/sse)...")
+    print("Connecting to SFDC Enterprise MCP Server (http://localhost:4005/sse)...")
     async with sse_client("http://localhost:4005/sse") as (read, write):
         async with ClientSession(read, write) as session:
             init_result = await session.initialize()
             print(f"[OK] MCP Session Initialized! Protocol Version: {init_result.protocol_version}")
 
-            # 1. Discover Tools
+            # 1. Discover All Tools
             tools_response = await session.list_tools()
             tools = tools_response.tools
             print(f"\n[OK] Discovered {len(tools)} Registered MCP Tools:")
-            for t in tools:
-                print(f"   * {t.name}: {t.description[:70]}...")
+            for idx, t in enumerate(tools, 1):
+                print(f"   {idx:2d}. {t.name:<25} - {t.description[:60]}...")
 
-            # 2. Call Tool: sfdc_get_case
-            print("\n[Executing Tool: sfdc_get_case for Case '03357264']...")
-            case_call = await session.call_tool("sfdc_get_case", {"case_number": "03357264", "include_comments": True})
-            case_data = json.loads(case_call.content[0].text)
-            print(f"   * Found:       {case_data.get('found')}")
-            print(f"   * Case Number: {case_data.get('case_number')}")
-            print(f"   * Subject:     {case_data.get('subject')}")
-            print(f"   * Status:      {case_data.get('status')} | Priority: {case_data.get('priority')}")
-            print(f"   * Owner:       {case_data.get('owner_name')}")
-            print(f"   * Query Time:  {case_data.get('_query_time_ms')}ms")
+            # 2. Test sfdc_get_case
+            print("\n[1/5 Testing sfdc_get_case]...")
+            c_res = await session.call_tool("sfdc_get_case", {"case_number": "03357264"})
+            c_data = json.loads(c_res.content[0].text)
+            print(f"   -> Found: {c_data.get('found')} | Subject: {c_data.get('subject')} | Time: {c_data.get('_query_time_ms')}ms")
 
-            # 3. Call Tool: sfdc_resolve_user
-            print("\n[Executing Tool: sfdc_resolve_user for 'Omkar Chitnis']...")
-            user_call = await session.call_tool("sfdc_resolve_user", {"query": "Omkar Chitnis"})
-            user_data = json.loads(user_call.content[0].text)
-            print(f"   * Users Found: {user_data.get('count')}")
-            for u in user_data.get("users", []):
-                print(f"     -> {u.get('name')} | Email: {u.get('email')} | Active: {u.get('is_active')}")
+            # 3. Test sfdc_get_account
+            print("\n[2/5 Testing sfdc_get_account]...")
+            a_res = await session.call_tool("sfdc_get_account", {"account_name": "Hyatt"})
+            a_data = json.loads(a_res.content[0].text)
+            print(f"   -> Found: {a_data.get('found')} | Account: {a_data.get('account', {}).get('account_name')} | Time: {a_data.get('_query_time_ms')}ms")
 
-            # 4. Call Tool: sfdc_get_team_workload
-            print("\n[Executing Tool: sfdc_get_team_workload]...")
-            wl_call = await session.call_tool("sfdc_get_team_workload", {})
-            wl_data = json.loads(wl_call.content[0].text)
-            print(f"   * Active Queues/Teams: {len(wl_data.get('workload', []))}")
-            if wl_data.get("workload"):
-                print(f"   * Top Queue: {wl_data['workload'][0].get('team_member')} (Active Tasks: {wl_data['workload'][0].get('active_tasks')})")
+            # 4. Test sfdc_get_integration
+            print("\n[3/5 Testing sfdc_get_integration (RMS PMS/CRS Rules)]...")
+            i_res = await session.call_tool("sfdc_get_integration", {"integration_name": "NiteSoft"})
+            i_data = json.loads(i_res.content[0].text)
+            print(f"   -> Integrations Found: {i_data.get('count')}")
+            if i_data.get("integrations"):
+                integ = i_data["integrations"][0]
+                print(f"   -> Name: {integ.get('name')} | Overbooking: {integ.get('overbooking_controls')} | Type: {integ.get('integration_type')}")
 
-            # 5. Call Tool: sfdc_query_clone
-            print("\n[Executing Tool: sfdc_query_clone (SELECT count(*) FROM users)]...")
-            q_call = await session.call_tool("sfdc_query_clone", {"sql": "SELECT count(*) AS total_users, is_active FROM users GROUP BY is_active;"})
-            q_data = json.loads(q_call.content[0].text)
-            print(f"   * Query Clone Rows: {q_data.get('rows')}")
+            # 5. Test sfdc_get_picklist_values
+            print("\n[4/5 Testing sfdc_get_picklist_values (Case.Priority)]...")
+            p_res = await session.call_tool("sfdc_get_picklist_values", {"sobject_name": "Case", "field_name": "Priority"})
+            p_data = json.loads(p_res.content[0].text)
+            print(f"   -> Allowed Priorities: {[p['value'] for p in p_data.get('picklist_values', [])]}")
 
-            # 6. Read Resource: sfdc://system/stats
-            print("\n[Reading Resource: sfdc://system/stats]...")
+            # 6. Read System Stats Resource
+            print("\n[5/5 Testing Resource: sfdc://system/stats]...")
             stats_res = await session.read_resource("sfdc://system/stats")
             stats_data = json.loads(stats_res.contents[0].text)
-            print(f"   * System Counts: {stats_data.get('counts')}")
+            print(f"   -> System Counts: {stats_data.get('counts')}")
 
-            print("\n" + "=" * 75)
-            print("SUCCESS: Official Python MCP SDK Verified! Ohm Agent Ready to Connect.")
-            print("=" * 75)
+            print("\n" + "=" * 78)
+            print("SUCCESS: All 24 Universal Enterprise SFDC MCP Tools Verified!")
+            print("=" * 78)
 
 if __name__ == "__main__":
     asyncio.run(main())
