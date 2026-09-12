@@ -27,6 +27,7 @@ const rateLimit = require('express-rate-limit');
 const ExcelJS = require('exceljs');
 const { getOrgAuth, invalidateTokenCache, streamSoql, runSoql, isSelectOnly, flattenRecord, executeSfDmlSingle, executeSfDmlBulk, getSfOwnerIdByName, reassignTasksInSalesforce } = require('./sf-client');
 const { notifyMiddlewareAlert } = require('./notifications');
+const { initHeartbeatScheduler, sendDailyHeartbeat } = require('./heartbeat');
 
 const PORT = process.env.PORT || 4000;
 const API_KEY = process.env.API_KEY; // set this before starting the server
@@ -594,6 +595,16 @@ app.post('/admin/sync/run', requireApiKey, requireAdmin, async (req, res) => {
     res.json({ message: `Sync process initiated successfully (${isFullSync ? 'Full Reconciliation' : 'Delta'}).` });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// --- ADMIN: Trigger Manual Heartbeat Test ---
+app.get('/admin/heartbeat/test', async (req, res) => {
+  try {
+    const result = await sendDailyHeartbeat(true);
+    res.json({ success: true, message: 'Heartbeat dispatched to Teams', result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -1862,6 +1873,7 @@ if (require.main === module) {
     console.log(
       `curl -X POST http://localhost:${PORT}/query -H "x-api-key: ${API_KEY || '<API_KEY>'}" -H "Content-Type: application/json" -d '{"soql":"SELECT Id, Subject FROM Task LIMIT 5"}'`
     );
+    initHeartbeatScheduler();
   });
 }
 
