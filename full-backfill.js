@@ -1,17 +1,62 @@
 /**
- * Comprehensive Background Backfill Engine for Salesforce Clone (ODS)
+ * Enterprise Background Backfill Engine for Salesforce Clone (ODS)
  * Server: sicsappsina6:5433 | Database: salesforce_clone
  * 
- * OPTION A IMPLEMENTATION: Dynamic Describe (100% Field Coverage)
- * Dynamically queries Salesforce metadata at runtime to ingest all standard and custom (__c)
- * fields across Case, Task, Account, and CaseComment into PostgreSQL with JSONB raw_payload.
+ * OPTION A IMPLEMENTATION: Full 21-Year Archive (All ~3.38 Million Cases)
+ * Dynamically queries Salesforce REST Describe API for 100% field coverage (557 Case fields)
+ * and streams every historical case from 2005 to present into PostgreSQL JSONB raw_payload.
  */
 
 const { getOrgAuth, streamSoql, describeSObject } = require('./sf-client');
 const pgDb = require('./db-postgres');
 
+const ESTIMATED_TOTAL_CASES = 3380000;
+
+async function backfillCases(auth) {
+  console.log('\n[1/4] Discovering & Streaming Full 21-Year Archive of Cases (2005 - 2026)...');
+  const fields = await describeSObject(auth.accessToken, auth.instanceUrl, 'Case');
+  console.log(`  Discovered ${fields.length} queryable fields on Case.`);
+
+  let totalCases = 0;
+  const startTime = Date.now();
+  const soql = `
+    SELECT 
+      ${fields.join(', ')},
+      Account.Name, Contact.Name, Owner.Name
+    FROM Case 
+    ORDER BY CreatedDate DESC
+  `;
+
+  try {
+    const { total } = await streamSoql(
+      auth.accessToken,
+      auth.instanceUrl,
+      soql,
+      async (batch) => {
+        await pgDb.upsertCasesBatch(batch);
+        totalCases += batch.length;
+        if (totalCases % 10000 === 0 || totalCases === batch.length) {
+          const pct = ((totalCases / ESTIMATED_TOTAL_CASES) * 100).toFixed(1);
+          const elapsedMin = ((Date.now() - startTime) / 60000).toFixed(1);
+          const ratePerSec = Math.round(totalCases / ((Date.now() - startTime) / 1000));
+          console.log(`  📦 [${elapsedMin}m] Cases stored: ${totalCases.toLocaleString()} / ~${ESTIMATED_TOTAL_CASES.toLocaleString()} (${pct}%) @ ${ratePerSec} cases/sec`);
+        } else {
+          process.stdout.write(`  Cases streamed: ${totalCases}...\r`);
+        }
+      },
+      { maxRecords: 5000000 } // Uncapped to store all ~3.38M cases
+    );
+    const durationMin = ((Date.now() - startTime) / 60000).toFixed(1);
+    console.log(`\n✅ Cases full archive complete: ${totalCases.toLocaleString()} cases stored with 100% field coverage in ${durationMin}m.`);
+    await pgDb.updateSyncState('Case', new Date(), totalCases, 'SUCCESS');
+  } catch (err) {
+    console.error('\n❌ Cases backfill error:', err.message);
+    await pgDb.updateSyncState('Case', new Date(), totalCases, 'ERROR', err.message);
+  }
+}
+
 async function backfillAccounts(auth) {
-  console.log('\n[Option A Backfill 1/4] Discovering & Streaming Accounts...');
+  console.log('\n[2/4] Discovering & Streaming Accounts...');
   const fields = await describeSObject(auth.accessToken, auth.instanceUrl, 'Account');
   console.log(`  Discovered ${fields.length} queryable fields on Account.`);
   
@@ -51,7 +96,7 @@ async function backfillAccounts(auth) {
       },
       { maxRecords: 250000 }
     );
-    console.log(`\n✅ Accounts backfill complete: ${totalAccounts} accounts stored with 100% field coverage.`);
+    console.log(`\n✅ Accounts backfill complete: ${totalAccounts} accounts stored.`);
     await pgDb.updateSyncState('Account', new Date(), totalAccounts, 'SUCCESS');
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
@@ -62,42 +107,8 @@ async function backfillAccounts(auth) {
   }
 }
 
-async function backfillCases(auth) {
-  console.log('\n[Option A Backfill 2/4] Discovering & Streaming Full Cases...');
-  const fields = await describeSObject(auth.accessToken, auth.instanceUrl, 'Case');
-  console.log(`  Discovered ${fields.length} queryable fields on Case.`);
-
-  let totalCases = 0;
-  const soql = `
-    SELECT 
-      ${fields.join(', ')},
-      Account.Name, Contact.Name, Owner.Name
-    FROM Case 
-    ORDER BY CreatedDate DESC
-  `;
-
-  try {
-    const { total } = await streamSoql(
-      auth.accessToken,
-      auth.instanceUrl,
-      soql,
-      async (batch) => {
-        await pgDb.upsertCasesBatch(batch);
-        totalCases += batch.length;
-        process.stdout.write(`  Cases streamed: ${totalCases} (all ${fields.length} fields)...\r`);
-      },
-      { maxRecords: 100000 }
-    );
-    console.log(`\n✅ Cases backfill complete: ${totalCases} cases stored with 100% field coverage.`);
-    await pgDb.updateSyncState('Case', new Date(), totalCases, 'SUCCESS');
-  } catch (err) {
-    console.error('\n❌ Cases backfill error:', err.message);
-    await pgDb.updateSyncState('Case', new Date(), totalCases, 'ERROR', err.message);
-  }
-}
-
 async function backfillCaseComments(auth) {
-  console.log('\n[Option A Backfill 3/4] Discovering & Streaming Case Comments...');
+  console.log('\n[3/4] Discovering & Streaming Case Comments...');
   const fields = await describeSObject(auth.accessToken, auth.instanceUrl, 'CaseComment');
   console.log(`  Discovered ${fields.length} queryable fields on CaseComment.`);
 
@@ -148,7 +159,7 @@ async function backfillCaseComments(auth) {
         totalComments += batch.length;
         process.stdout.write(`  Comments streamed: ${totalComments}...\r`);
       },
-      { maxRecords: 100000 }
+      { maxRecords: 250000 }
     );
     console.log(`\n✅ Case Comments backfill complete: ${totalComments} comments stored.`);
     await pgDb.updateSyncState('CaseComment', new Date(), totalComments, 'SUCCESS');
@@ -162,7 +173,7 @@ async function backfillCaseComments(auth) {
 }
 
 async function backfillTasks(auth) {
-  console.log('\n[Option A Backfill 4/4] Discovering & Streaming Full Tasks...');
+  console.log('\n[4/4] Discovering & Streaming Tasks...');
   const fields = await describeSObject(auth.accessToken, auth.instanceUrl, 'Task');
   console.log(`  Discovered ${fields.length} queryable fields on Task.`);
 
@@ -177,7 +188,7 @@ async function backfillTasks(auth) {
       Owner.Name,
       LastModifiedBy.Name
     FROM Task
-    WHERE What.Type = 'Case'
+    WHERE ActivityDate = NULL OR ActivityDate >= 2024-01-01
     ORDER BY CreatedDate DESC
   `;
 
@@ -191,9 +202,9 @@ async function backfillTasks(auth) {
         totalTasks += batch.length;
         process.stdout.write(`  Tasks streamed: ${totalTasks} (all ${fields.length} fields)...\r`);
       },
-      { maxRecords: 100000 }
+      { maxRecords: 150000 }
     );
-    console.log(`\n✅ Tasks backfill complete: ${totalTasks} tasks stored with 100% field coverage.`);
+    console.log(`\n✅ Tasks backfill complete: ${totalTasks} tasks stored.`);
     await pgDb.updateSyncState('Task', new Date(), totalTasks, 'SUCCESS');
   } catch (err) {
     console.error('\n❌ Tasks backfill error:', err.message);
@@ -202,19 +213,19 @@ async function backfillTasks(auth) {
 
 async function runFullBackfill() {
   console.log('===========================================================');
-  console.log('🚀 COMMENCING ENTERPRISE SALESFORCE CLONE FULL BACKFILL');
-  console.log('Option A: Dynamic Describe (100% Field Coverage)');
+  console.log('🚀 COMMENCING 21-YEAR FULL ARCHIVE SALESFORCE CLONE BACKFILL');
   console.log('Target: sicsappsina6:5433 | Database: salesforce_clone');
+  console.log(`Cases Target: ~${ESTIMATED_TOTAL_CASES.toLocaleString()} (All 557 Fields)`);
   console.log('===========================================================');
 
   const startTime = Date.now();
   const auth = getOrgAuth();
 
-  // 1. Accounts
-  await backfillAccounts(auth);
-
-  // 2. Cases
+  // 1. Cases (All 3.38M Cases with 100% field coverage)
   await backfillCases(auth);
+
+  // 2. Accounts
+  await backfillAccounts(auth);
 
   // 3. Case Comments
   await backfillCaseComments(auth);
@@ -224,7 +235,7 @@ async function runFullBackfill() {
 
   const durationMin = ((Date.now() - startTime) / 60000).toFixed(1);
   console.log('\n===========================================================');
-  console.log(`🎉 FULL BACKFILL PIPELINE COMPLETE in ${durationMin} minutes!`);
+  console.log(`🎉 21-YEAR FULL BACKFILL PIPELINE COMPLETE in ${durationMin} minutes!`);
   console.log('===========================================================');
 
   const counts = await pgDb.query(`

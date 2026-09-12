@@ -392,13 +392,29 @@ function fetchQueryBatch(accessToken, instanceUrl, uriPath, opts = {}) {
  * delivered to onBatch (the final batch is trimmed to land exactly on the cap).
  * Returns { total, truncated }.
  */
-async function streamSoql(accessToken, instanceUrl, soql, onBatch, opts = {}) {
+async function streamSoql(initialToken, instanceUrl, soql, onBatch, opts = {}) {
   const { maxRecords } = opts;
   let total = 0;
+  let currentToken = initialToken;
+  let currentInstance = instanceUrl;
   let uriPath = `/services/data/v60.0/query?q=${encodeURIComponent(soql.trim())}`;
 
   while (uriPath) {
-    const data = await fetchQueryBatch(accessToken, instanceUrl, uriPath, opts);
+    let data;
+    try {
+      data = await fetchQueryBatch(currentToken, currentInstance, uriPath, opts);
+    } catch (err) {
+      if (err.statusCode === 401 || (err.message && (err.message.includes('INVALID_SESSION_ID') || err.message.includes('Session expired')))) {
+        console.log('\n[SFDC Session] Session expired during long stream, refreshing auth token...');
+        const fresh = getOrgAuth(true);
+        currentToken = fresh.accessToken;
+        currentInstance = fresh.instanceUrl || currentInstance;
+        data = await fetchQueryBatch(currentToken, currentInstance, uriPath, opts);
+      } else {
+        throw err;
+      }
+    }
+
     let batch = data.records || [];
 
     if (maxRecords && total + batch.length > maxRecords) {
