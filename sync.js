@@ -341,12 +341,16 @@ async function processRecords(records) {
     }
     stmt.finalize();
 
-    // Dual-Write to PostgreSQL Salesforce Clone on sicsappsina6:5433
+    // Dual-Write to PostgreSQL Salesforce Clone on sicsappsina6:5433 with DLQ Protection
     try {
         const pgDb = require('./db-postgres');
+        const dlq = require('./dlq');
         pgDb.upsertTasksBatch(records)
             .then(count => { if (count > 0) console.log(`[Postgres ODS] Synced ${count} tasks to sicsappsina6:5433.`); })
-            .catch(err => console.warn('[Postgres ODS] Sync error:', err.message));
+            .catch(async (err) => {
+                console.warn('[Postgres ODS] Sync failure, enqueuing to DLQ:', err.message);
+                await dlq.enqueue('tasks', records, err);
+            });
     } catch (e) {}
 
     return newlyInsertedCareTasks;
@@ -783,6 +787,18 @@ if (process.env.name === 'soql-sync' || require.main === module) {
     syncOnce({ isFullSync: false });
     cron.schedule(SYNC_CRON, () => syncOnce({ isFullSync: false }));
 
+    // 6. DEAD LETTER QUEUE (DLQ) REPLAY WORKER: Retries any failed PostgreSQL batches every 30s
+    try {
+        const dlq = require('./dlq');
+        const pgDb = require('./db-postgres');
+        dlq.startDlqReplayWorker({
+            tasks: (recs) => pgDb.upsertTasksBatch(recs),
+            cases: (recs) => pgDb.upsertCasesBatch(recs)
+        }, 30000);
+    } catch (dlqErr) {
+        console.warn('[DLQ Engine] Initialization warning:', dlqErr.message);
+    }
+
     console.log('--- Enterprise Delta & Reconciliation Engine Active ---');
-    console.log(`Delta schedule: ${SYNC_CRON} | Reconciliation schedule: ${RECONCILIATION_CRON} | Archive schedule: ${ARCHIVE_CRON}`);
+    console.log(`Delta schedule: ${SYNC_CRON} | Reconciliation schedule: ${RECONCILIATION_CRON} | Archive schedule: ${ARCHIVE_CRON} | DLQ Replay: Active (30s)`);
 }
