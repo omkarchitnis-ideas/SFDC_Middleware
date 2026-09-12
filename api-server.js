@@ -28,6 +28,7 @@ const ExcelJS = require('exceljs');
 const { getOrgAuth, invalidateTokenCache, streamSoql, runSoql, isSelectOnly, flattenRecord, executeSfDmlSingle, executeSfDmlBulk, getSfOwnerIdByName, reassignTasksInSalesforce } = require('./sf-client');
 const { notifyMiddlewareAlert } = require('./notifications');
 const { initHeartbeatScheduler, sendDailyHeartbeat } = require('./heartbeat');
+const { queryCache } = require('./query-cache');
 
 const PORT = process.env.PORT || 4000;
 const API_KEY = process.env.API_KEY; // set this before starting the server
@@ -280,6 +281,42 @@ app.post('/query', requireApiKey, queryLimiter, async (req, res) => {
   const soql = validateSoqlBody(req, res);
   if (!soql) return;
 
+  // Cache configuration & bypass flags
+  const bypassCache = req.body?.cache === false || 
+                      req.body?.noCache === true || 
+                      req.header('x-no-cache') === 'true' || 
+                      (req.header('cache-control') && req.header('cache-control').toLowerCase().includes('no-cache'));
+  const customTtl = req.body?.ttl || req.header('x-cache-ttl');
+  const cacheKey = !bypassCache ? queryCache.generateKey(soql, QUERY_PREVIEW_CAP) : null;
+
+  // Check cache hit
+  if (cacheKey) {
+    const cached = queryCache.get(cacheKey);
+    if (cached) {
+      const duration = Math.round(performance.now() - started);
+      res.setHeader('X-Cache', 'HIT');
+      res.setHeader('X-Cache-Age', `${cached.ageSeconds}s`);
+      res.setHeader('X-Cache-TTL', `${cached.ttlSeconds}s`);
+
+      // Log Successful Run (Cached)
+      logAudit({
+        user_name: req.user.user_name,
+        key_value: req.user.key_value,
+        endpoint: '/query (cached)',
+        soql,
+        status_code: 200,
+        row_count: cached.data.count,
+        execution_time_ms: duration
+      });
+
+      return res.json({
+        ...cached.data,
+        cached: true,
+        cacheAgeSeconds: cached.ageSeconds
+      });
+    }
+  }
+
   try {
     const { accessToken, instanceUrl } = getOrgAuth();
     const { records, total, truncated } = await runSoql(accessToken, instanceUrl, soql, {
@@ -299,11 +336,21 @@ app.post('/query', requireApiKey, queryLimiter, async (req, res) => {
       execution_time_ms: duration
     });
 
-    res.json({
+    const responsePayload = {
       count: total,
       truncated,
       note: truncated ? `Showing first ${QUERY_PREVIEW_CAP} rows.` : undefined,
       records: records.map(r => flattenRecord(r))
+    };
+
+    if (cacheKey) {
+      queryCache.set(cacheKey, responsePayload, customTtl);
+    }
+
+    res.setHeader('X-Cache', bypassCache ? 'BYPASS' : 'MISS');
+    res.json({
+      ...responsePayload,
+      cached: false
     });
   } catch (err) {
     if (err.statusCode === 401 || (err.message && (err.message.includes('401') || err.message.includes('INVALID_SESSION_ID')))) {
@@ -325,11 +372,21 @@ app.post('/query', requireApiKey, queryLimiter, async (req, res) => {
           execution_time_ms: duration
         });
 
-        return res.json({
+        const responsePayload = {
           count: total,
           truncated,
           note: truncated ? `Showing first ${QUERY_PREVIEW_CAP} rows.` : undefined,
           records: records.map(r => flattenRecord(r))
+        };
+
+        if (cacheKey) {
+          queryCache.set(cacheKey, responsePayload, customTtl);
+        }
+
+        res.setHeader('X-Cache', bypassCache ? 'BYPASS' : 'MISS');
+        return res.json({
+          ...responsePayload,
+          cached: false
         });
       } catch (retryErr) {
         err = retryErr;
@@ -394,6 +451,24 @@ app.patch('/admin/keys/:id/scopes', requireApiKey, requireAdmin, (req, res) => {
   res.json({ message: 'Key scopes updated successfully.', id, scopes });
 });
 
+// --- ADMIN: Query Cache Statistics ---
+app.get('/admin/cache/stats', requireApiKey, requireAdmin, (req, res) => {
+  res.json({
+    success: true,
+    stats: queryCache.getStats()
+  });
+});
+
+// --- ADMIN: Clear Query Cache ---
+app.post('/admin/cache/clear', requireApiKey, requireAdmin, (req, res) => {
+  const clearedCount = queryCache.clear();
+  res.json({
+    success: true,
+    message: `Query cache cleared successfully. Evicted ${clearedCount} cached entries.`,
+    clearedCount
+  });
+});
+
 // =========================================================
 // --- DML ENDPOINTS (Granular Scope Control & 200-Chunking) ---
 // =========================================================
@@ -431,6 +506,7 @@ app.post('/api/v1/dml/insert', requireApiKey, requireScope('INSERT'), async (req
 
     // Instant local cache refresh
     syncOnce({ isFullSync: false }).catch(console.error);
+    queryCache.clear();
 
     res.json({ success: true, count, result });
   } catch (err) {
@@ -482,6 +558,7 @@ app.patch('/api/v1/dml/update', requireApiKey, requireScope('UPDATE'), async (re
 
     // Instant local cache refresh
     syncOnce({ isFullSync: false }).catch(console.error);
+    queryCache.clear();
 
     res.json({ success: true, count, result });
   } catch (err) {
@@ -533,6 +610,7 @@ app.delete('/api/v1/dml/delete', requireApiKey, requireScope('DELETE'), async (r
 
     // Instant local cache refresh
     syncOnce({ isFullSync: false }).catch(console.error);
+    queryCache.clear();
 
     res.json({ success: true, count, result });
   } catch (err) {
@@ -1662,6 +1740,7 @@ app.post('/api/tasks/reassign', async (req, res) => {
 
     updateMany(existingTasks.length > 0 ? existingTasks : taskNumbers.map(n => ({ Task_Number: n, Case_Number: '', Assigned: '' })));
     sfDb.close();
+    queryCache.clear();
 
     res.json({
       status: 'ok',

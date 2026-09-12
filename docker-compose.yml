@@ -12,3 +12,13 @@ services:
     volumes:
       - ./salesforce_data.db:/app/salesforce_data.db
       - ./app.db:/app/app.db
+    networks:
+      - sfdc_net
+
+networks:
+  sfdc_net:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.200.1.0/24
