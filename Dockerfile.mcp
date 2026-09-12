@@ -1,0 +1,11 @@
+FROM sfdc_middleware-sfdc-middleware
+
+WORKDIR /app
+
+RUN npm install --save @modelcontextprotocol/sdk zod
+
+COPY . .
+
+EXPOSE 4005
+
+CMD ["node", "mcp-server.js"]

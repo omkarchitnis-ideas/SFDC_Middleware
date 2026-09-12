@@ -1958,6 +1958,46 @@ app.get('/api/task-history/:taskNumber', (req, res) => {
   }
 });
 
+// =========================================================================
+// MODEL CONTEXT PROTOCOL (MCP) INTEGRATION
+// =========================================================================
+const { SSEServerTransport } = require('@modelcontextprotocol/sdk/server/sse.js');
+const { mcp } = require('./mcp-server');
+
+const mcpTransports = new Map();
+
+app.get('/mcp/health', (req, res) => {
+  res.json({
+    status: 'HEALTHY',
+    service: 'sfdc-middleware-mcp',
+    active_sessions: mcpTransports.size,
+    tools: Object.keys(mcp._registeredTools || mcp.tools || {}),
+    timestamp: new Date()
+  });
+});
+
+app.get('/sse', async (req, res) => {
+  console.log('[MCP SSE] Client connected on /sse');
+  const transport = new SSEServerTransport('/message', res);
+  mcpTransports.set(transport.sessionId, transport);
+
+  req.on('close', () => {
+    console.log(`[MCP SSE] Client disconnected: ${transport.sessionId}`);
+    mcpTransports.delete(transport.sessionId);
+  });
+
+  await mcp.connect(transport);
+});
+
+app.post('/message', async (req, res) => {
+  const sessionId = req.query.sessionId;
+  const transport = mcpTransports.get(sessionId);
+  if (!transport) {
+    return res.status(404).json({ error: `Session not found: ${sessionId}` });
+  }
+  await transport.handlePostMessage(req, res, req.body);
+});
+
 // Turn a malformed-JSON body into a clean JSON error instead of Express's default HTML page.
 app.use((err, req, res, next) => {
   if (err.type === 'entity.parse.failed') {
