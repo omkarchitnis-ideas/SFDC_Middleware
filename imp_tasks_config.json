@@ -1,0 +1,20 @@
+{
+  "selected_reasons": [
+    "Component Rooms Activation - Agent Existing Property",
+    "G3 Data Feed",
+    "G3 Function Space Activation",
+    "G3 Product Bundle Migration",
+    "G3 Property Merge-Split",
+    "G3 RMS Recoding",
+    "G3 System Re-Installation",
+    "Optix - Installation & Data Capture",
+    "Other",
+    "Other Install Related issue",
+    "Other Installation related issues",
+    "Synthetic History Build to Standard Build without AMS Rebuild Activity (LE)",
+    "Synthetic History to Standard Switch with AMS Rebuild Activity",
+    "System maintenance",
+    "Unassigned"
+  ],
+  "selected_subjects": []
+}

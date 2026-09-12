@@ -1,0 +1,16 @@
+FROM node:22-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+RUN npm install -g @salesforce/cli
+
+COPY package*.json ./
+
+RUN npm ci --only=production --build-from-source
+
+COPY . .
+
+EXPOSE 4000
+
+CMD ["node", "api-server.js"]

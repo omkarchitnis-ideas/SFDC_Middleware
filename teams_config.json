@@ -1,0 +1,19 @@
+{
+  "teamsWebhookUrl": "https://defaultb1c14d5c362545b3a4309552373a0c.2f.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/e4564ad0c24241829915c14780f9fc52/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=a1SZKPvb9iGdn3OyV3uO4_0plT1bavErFgmSbAeoblk",
+  "shiftSummaryWebhookUrl": "https://defaultb1c14d5c362545b3a4309552373a0c.2f.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/e4564ad0c24241829915c14780f9fc52/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=a1SZKPvb9iGdn3OyV3uO4_0plT1bavErFgmSbAeoblk",
+  "userEmails": {
+    "Omkar Chitnis": "omkar.chitnis@ideas.com",
+    "Manoj Shinde": "manoj.shinde@ideas.com",
+    "Sandesh Shahapurkar": "sandesh.shahapurkar@ideas.com",
+    "Vinay Anavatti": "vinay.anavatti@ideas.com",
+    "Saurabh Thakare": "saurabh.thakare@ideas.com",
+    "Afroz Khan": "afroz.khan@ideas.com",
+    "Swapnil Satpute": "swapnil.satpute@ideas.com",
+    "Vishal Goyal": "vishal.goyal@ideas.com",
+    "Vikash Yadav": "vikash.yadav@ideas.com",
+    "Karteek Desai": "karteek.desai@ideas.com",
+    "Kishore Fukate": "kishore.fukate@ideas.com",
+    "Omkar Shete": "omkar.shete@ideas.com",
+    "Bipinchandra Khangar": "bipinchandra.khangar@ideas.com"
+  }
+}

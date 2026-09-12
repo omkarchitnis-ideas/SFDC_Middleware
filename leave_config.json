@@ -1,0 +1,77 @@
+{
+  "weekoffs": {
+    "Omkar Chitnis": [
+      "Saturday",
+      "Sunday"
+    ],
+    "Manoj Shinde": [
+      "Saturday",
+      "Friday"
+    ],
+    "Sandesh Shahapurkar": [
+      "Friday",
+      "Saturday"
+    ],
+    "Vinay Anavatti": [
+      "Saturday",
+      "Sunday"
+    ],
+    "Vishal Goyal": [
+      "Saturday",
+      "Sunday"
+    ],
+    "Bipinchandra Khangar": [
+      "Saturday",
+      "Sunday"
+    ],
+    "Afroz Khan": [
+      "Saturday",
+      "Sunday"
+    ],
+    "Omkar Shete": [
+      "Sunday",
+      "Monday"
+    ],
+    "Kishore Fukate": [
+      "Saturday",
+      "Friday"
+    ],
+    "Saurabh Thakare": [
+      "Sunday",
+      "Saturday"
+    ],
+    "Karteek Desai": [
+      "Sunday",
+      "Saturday"
+    ],
+    "Swapnil Satpute": [
+      "Sunday",
+      "Monday"
+    ],
+    "Vikash Yadav": [
+      "Sunday",
+      "Monday"
+    ]
+  },
+  "leaves": [
+    {
+      "member": "Omkar Chitnis",
+      "startDate": "2026-09-07",
+      "endDate": "2026-09-11",
+      "reason": "Vacation"
+    }
+  ],
+  "dailyOverrides": {
+    "2026-09-01": {
+      "Saurabh Thakare": "OnLeave",
+      "Vikash Yadav": "OnLeave"
+    },
+    "2026-09-02": {
+      "Omkar Chitnis": "OnLeave",
+      "Vikash Yadav": "OnLeave"
+    },
+    "2026-09-03": {
+      "Sandesh Shahapurkar": "OnLeave"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+# Environment & Secrets
+.env
+*.env
+.sf_token_cache.json
+
+# Dependencies
+node_modules/
+
+# SQLite Database Files
+*.db
+*.db-wal
+*.db-shm
+salesforce_data.db
+app.db
+
+# OS & Editor generated files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local cache & logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

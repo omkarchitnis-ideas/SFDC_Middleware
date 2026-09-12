@@ -1,0 +1,20 @@
+{
+  "name": "salesforce-excel-sync",
+  "version": "1.0.0",
+  "description": "Polls Salesforce every 1 minute via the Salesforce CLI's built-in auth and writes results to a local Excel file.",
+  "main": "sync.js",
+  "scripts": {
+    "start": "node sync.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "compression": "^1.8.1",
+    "dotenv": "^17.4.2",
+    "exceljs": "^4.4.0",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.6.2",
+    "node-cron": "^3.0.3",
+    "sqlite3": "^6.0.1"
+  }
+}

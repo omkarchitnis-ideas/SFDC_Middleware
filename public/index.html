@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SFDC Tool</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/material-ocean.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/sql/sql.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg: #0B0F17;
+    --panel: #131A26;
+    --panel-alt: #1B2332;
+    --border: #263041;
+    --text: #E6EAF2;
+    --text-dim: #8B96A8;
+    --accent: #4FD1C5;
+    --accent-dim: #2A6E68;
+    --danger: #F26D6D;
+    --warn: #E8B75A;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+  }
+
+  .shell {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px 64px;
+  }
+  
+  .CodeMirror {
+    font-family: var(--mono);
+    font-size: 13.5px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    height: auto;
+    min-height: 140px;
+  }
+  .CodeMirror-focused 
+	{ border-color: var(--accent); }
+  .pagination 
+	{ display: flex; gap: 10px; align-items: center; justify-content: center; margin-top: 15px; }
+  .sync-card 
+	{ background: var(--panel-alt); padding: 16px; border-radius: 10px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;}
+
+  .topbar {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .brand .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: inline-block;
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  .brand h1 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.2px;
+  }
+
+  .brand span.tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .key-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .key-field input {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    width: 200px;
+    outline: none;
+  }
+  .key-field input:focus { border-color: var(--accent); }
+
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--text-dim);
+    display: inline-block;
+  }
+  .status-dot.ok { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .status-dot.bad { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+
+  .layout {
+    display: grid;
+    /* CSS Grid fix applied here */
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 20px;
+  }
+
+  .admin-layout {
+    display: none; /* Hidden by default */
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  @media (max-width: 780px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    /* Ensure panel shrinks gracefully */
+    min-width: 0;
+  }
+
+  .panel h2 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-dim);
+    margin: 0 0 12px 0;
+    font-weight: 700;
+  }
+
+  .saved-list { display: flex; flex-direction: column; gap: 6px; }
+  .saved-item {
+    text-align: left;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .saved-item:hover { background: var(--panel-alt); color: var(--text); border-color: var(--border); }
+
+  .empty-note {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  .editor-panel { display: flex; flex-direction: column; gap: 14px; }
+
+  textarea#soql {
+    width: 100%;
+    min-height: 140px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13.5px;
+    line-height: 1.6;
+    padding: 14px;
+    border-radius: 10px;
+    resize: vertical;
+    outline: none;
+  }
+  textarea#soql:focus { border-color: var(--accent); }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .toolbar-left { display: flex; gap: 8px; }
+
+  button {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 13px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    padding: 9px 16px;
+    cursor: pointer;
+    transition: transform 0.05s ease;
+  }
+  button:active { transform: scale(0.98); }
+
+  .btn-run { background: var(--accent); color: #06201D; }
+  .btn-run:hover { background: #5FE0D4; }
+  .btn-run:disabled { background: var(--accent-dim); color: #0d2a27; cursor: default; }
+
+  .btn-ghost { background: transparent; border-color: var(--border); color: var(--text-dim); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--text-dim); }
+  .btn-ghost.active { color: var(--text); border-color: var(--accent); background: rgba(79, 209, 197, 0.1); }
+  
+  .btn-danger { background: rgba(242, 109, 109, 0.1); border-color: rgba(242, 109, 109, 0.4); color: var(--danger); }
+  .btn-danger:hover { background: rgba(242, 109, 109, 0.2); }
+
+  .meta-line { font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+
+  .alert {
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 13px;
+    font-family: var(--mono);
+    display: none;
+  }
+  .alert.show { display: block; }
+  .alert.error { background: rgba(242,109,109,0.1); border: 1px solid rgba(242,109,109,0.35); color: #FFB4B4; }
+
+  .results-wrap {
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    max-height: 480px;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 12.5px;
+    font-family: var(--mono);
+  }
+
+  thead th {
+    position: sticky;
+    top: 0;
+    background: var(--panel-alt);
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--accent);
+    font-weight: 600;
+    white-space: nowrap;
+    z-index: 10;
+  }
+
+  tbody td {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(38,48,65,0.6);
+    color: var(--text);
+    white-space: nowrap;
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  tbody tr:hover { background: rgba(79,209,197,0.05); }
+
+  .placeholder {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+
+  /* Admin Dashboard Styles */
+  .admin-section { margin-bottom: 40px; }
+  .admin-section h2 { font-size: 16px; color: var(--text); margin-bottom: 16px; text-transform: none; font-family: var(--sans);}
+  
+  .form-group { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
+  .form-group input, .form-group select {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    outline: none;
+  }
+  .form-group input:focus, .form-group select:focus { border-color: var(--accent); }
+  
+  .badge { padding: 4px 8px; border-radius: 6px; font-size: 11px; font-family: var(--sans); font-weight: 600; }
+  .badge-active { background: rgba(79,209,197,0.15); color: var(--accent); }
+  .badge-disabled { background: rgba(242,109,109,0.15); color: var(--danger); }
+
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(6,32,29,0.35);
+    border-top-color: #06201D;
+    border-radius: 50%;
+    display: inline-block;
+    animation: spin 0.7s linear infinite;
+    margin-right: 6px;
+    vertical-align: -2px;
+  }
+  .spinner-dark {
+    width: 12px; height: 12px;
+    border: 2px solid rgba(230,234,242,0.25);
+    border-top-color: var(--text);
+    border-radius: 50%;
+    display: inline-block;
+    animation: spin 0.7s linear infinite;
+    margin-right: 6px;
+    vertical-align: -1px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <h1>SFDC Tool</h1>
+      <span class="tag">salesforce &rarr; live query</span>
+    </div>
+    <div class="topbar-right">
+      <div class="key-field">
+        <span class="status-dot" id="statusDot"></span>
+        <span>API key</span>
+        <input type="password" id="apiKey" placeholder="x-api-key" autocomplete="off">
+      </div>
+      <button class="btn-ghost" id="navConsoleBtn" style="display: none;">Back to Console</button>
+      <button class="btn-ghost" id="navAdminBtn" style="display: none;">Admin</button>
+    </div>
+  </div>
+
+  <!-- SFDC Tool View -->
+  <div class="layout" id="viewConsole">
+    <div class="panel">
+      <h2>Saved Queries</h2>
+      <div class="saved-list" id="savedList"></div>
+      <p class="empty-note" id="savedEmpty">Run a query and hit "Save" to keep it here for next time. Stored only in this browser.</p>
+    </div>
+
+    <div class="panel editor-panel">
+      <textarea id="soql" spellcheck="false" placeholder="SELECT Id, Subject, Status FROM Task LIMIT 25"></textarea>
+
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <button class="btn-run" id="runBtn">Run query</button>
+          <button class="btn-ghost" id="saveBtn">Save</button>
+          <button class="btn-ghost" id="csvBtn">Export CSV</button>
+          <button class="btn-ghost" id="xlsxBtn">Export XLSX</button>
+        </div>
+        <div class="meta-line" id="metaLine">Ready</div>
+      </div>
+
+      <div class="alert error" id="errorBox"></div>
+
+      <div class="results-wrap" id="resultsWrap">
+        <div class="placeholder">Results will show up here after you run a query.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Dashboard View -->
+  <div class="admin-layout" id="viewAdmin">
+    <div class="panel">
+      <div class="admin-section">
+        <h2>API Key Management</h2>
+        <div class="form-group" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px;">
+          <input type="text" id="newUserName" placeholder="User Name (e.g., John Doe)" style="width: 200px;">
+          <select id="newUserRole" style="background:var(--panel-alt); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:7px 10px; font-size:12px;">
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+          <select id="newUserScopes" style="background:var(--panel-alt); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:7px 10px; font-size:12px;">
+            <option value="SELECT">SELECT (Read Only)</option>
+            <option value="SELECT,UPDATE">SELECT + UPDATE</option>
+            <option value="SELECT,INSERT,UPDATE">SELECT + INSERT + UPDATE</option>
+            <option value="SELECT,INSERT,UPDATE,DELETE">Full DML (SELECT, INSERT, UPDATE, DELETE)</option>
+            <option value="ALL">ALL (Unrestricted Admin)</option>
+          </select>
+          <button class="btn-run" onclick="createApiKey()">Generate Key</button>
+        </div>
+
+        <div class="results-wrap" style="max-height: 320px; margin-bottom: 20px;">
+          <table>
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Role</th>
+                <th>API Key</th>
+                <th>Rights (Scopes)</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="keysTableBody">
+               <tr><td colspan="6" class="placeholder">Loading keys...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="admin-section">
+        <h2>Audit Logs (Admin Only)</h2>
+        <div class="results-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>User</th>
+                <th>Endpoint</th>
+                <th>SOQL</th>
+                <th>Rows</th>
+                <th>Time (ms)</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="logsTableBody">
+               <tr><td colspan="7" class="placeholder">Loading logs...</td></tr>
+            </tbody>
+          </table>
+		  
+		  <div class="pagination">
+			  <button class="btn-ghost" style="padding: 5px 12px;" onclick="changeLogPage(-1)">Previous</button>
+			  <span id="pageIndicator" style="font-size: 12px; font-family: var(--mono); color: var(--text-dim);">Page 1</span>
+			  <button class="btn-ghost" style="padding: 5px 12px;" onclick="changeLogPage(1)">Next</button>
+		   
+			  
+			  
+		  </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const API_BASE = window.location.origin;
+  const $ = (id) => document.getElementById(id);
+
+  const soqlBox = $('soql');
+  const apiKeyBox = $('apiKey');
+  const runBtn = $('runBtn');
+  const saveBtn = $('saveBtn');
+  const csvBtn = $('csvBtn');
+  const xlsxBtn = $('xlsxBtn');
+  const metaLine = $('metaLine');
+  const errorBox = $('errorBox');
+  const resultsWrap = $('resultsWrap');
+  const savedList = $('savedList');
+  const savedEmpty = $('savedEmpty');
+  const statusDot = $('statusDot');
+
+  const navConsoleBtn = $('navConsoleBtn');
+  const navAdminBtn = $('navAdminBtn');
+  const viewConsole = $('viewConsole');
+  const viewAdmin = $('viewAdmin');
+
+  let lastRecords = [];
+
+  // --- View Navigation ---
+  navAdminBtn.onclick = () => {
+    viewConsole.style.display = 'none';
+    viewAdmin.style.display = 'grid';
+    navAdminBtn.style.display = 'none';
+    navConsoleBtn.style.display = 'block';
+    loadAdminData(); // Refresh data when tab is opened
+  };
+
+  navConsoleBtn.onclick = () => {
+    viewAdmin.style.display = 'none';
+    viewConsole.style.display = 'grid';
+    navConsoleBtn.style.display = 'none';
+    checkAdminVisibility();
+  };
+
+  function isSelectOnly(soql) {
+	  const cleaned = String(soql || '').trim().replace(/\s+/g, ' ');
+	  
+	  // 1. The query must still start with SELECT
+	  if (!/^SELECT\s/i.test(cleaned)) return false;
+	  
+	  // 2. Temporarily remove all string literals ('...') so the regex doesn't scan inside them
+	  const stringlessQuery = cleaned.replace(/'[^']*'/g, '');
+	  
+	  // 3. Now check the safe string for blocked DML keywords
+	  const blocked = /\b(INSERT|UPDATE|DELETE|UPSERT|MERGE|UNDELETE|CREATE|DROP|ALTER)\b/i;
+	  return !blocked.test(stringlessQuery);
+	}
+
+  // --- Persist API key + saved queries locally ---
+  apiKeyBox.value = localStorage.getItem('soql_api_key') || '';
+  
+  async function checkAdminVisibility() {
+    const key = apiKeyBox.value.trim();
+    if (!key) {
+      navAdminBtn.style.display = 'none';
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/me`, { headers: { 'x-api-key': key } });
+      if (res.ok) {
+        const me = await res.json();
+        if (me.role === 'admin') {
+          navAdminBtn.style.display = 'block';
+        } else {
+          navAdminBtn.style.display = 'none';
+          if (viewAdmin.style.display !== 'none') {
+            navConsoleBtn.click(); // Return to console if key is not admin
+          }
+        }
+      } else {
+        navAdminBtn.style.display = 'none';
+      }
+    } catch (e) {
+      navAdminBtn.style.display = 'none';
+    }
+  }
+
+  checkAdminVisibility(); // Initial check on load
+
+  apiKeyBox.addEventListener('input', () => {
+    localStorage.setItem('soql_api_key', apiKeyBox.value);
+    checkAdminVisibility();
+  });
+
+  function getSavedQueries() {
+    try { return JSON.parse(localStorage.getItem('soql_saved') || '[]'); }
+    catch { return []; }
+  }
+
+  
+
+  saveBtn.onclick = () => {
+    const q = soqlBox.value.trim();
+    if (!q) return;
+    const saved = getSavedQueries();
+    if (!saved.includes(q)) {
+      saved.unshift(q);
+      localStorage.setItem('soql_saved', JSON.stringify(saved.slice(0, 15)));
+      renderSavedQueries();
+    }
+  };
+
+  function setLoading(isLoading) {
+    runBtn.disabled = isLoading;
+    runBtn.innerHTML = isLoading ? '<span class="spinner"></span>Running…' : 'Run query';
+  }
+
+  function showError(msg) {
+    errorBox.textContent = msg;
+    errorBox.classList.add('show');
+  }
+  function clearError() {
+    errorBox.classList.remove('show');
+    errorBox.classList.add('error');
+    errorBox.style.background = '';
+    errorBox.style.borderColor = '';
+    errorBox.style.color = '';
+    errorBox.textContent = '';
+  }
+
+  function flattenValue(v) {
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'object') return JSON.stringify(v);
+    return String(v);
+  }
+
+  function renderTable(records) {
+    if (!records.length) {
+      resultsWrap.innerHTML = '<div class="placeholder">Query ran successfully — 0 rows returned.</div>';
+      return;
+    }
+    const cols = Object.keys(records[0]).filter(k => k !== 'attributes');
+
+    let html = '<table><thead><tr>';
+    cols.forEach(c => html += `<th>${c}</th>`);
+    html += '</tr></thead><tbody>';
+
+    records.forEach(r => {
+      html += '<tr>';
+      cols.forEach(c => {
+        html += `<td title="${flattenValue(r[c]).replace(/"/g, '&quot;')}">${flattenValue(r[c])}</td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+
+    resultsWrap.innerHTML = html;
+  }
+
+  async function runExport(format, btn) {
+    const soql = soqlBox.value.trim();
+    const key = apiKeyBox.value.trim();
+
+    clearError();
+    if (!soql) { showError('Write a SOQL query first.'); return; }
+    if (!isSelectOnly(soql)) { showError('Only SELECT queries are allowed.'); return; }
+    if (!key) { showError('Enter your API key above.'); return; }
+
+    const originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-dark"></span>Exporting…';
+
+    try {
+      const res = await fetch(`${API_BASE}/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': key },
+        body: JSON.stringify({ soql, format })
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showError(data.error || `Export failed with status ${res.status}`);
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `soql_export_${Date.now()}.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      showError('Export request failed. Is the server running?');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
+  }
+
+  csvBtn.onclick = () => runExport('csv', csvBtn);
+  xlsxBtn.onclick = () => runExport('xlsx', xlsxBtn);
+
+  async function runQuery() {
+    const soql = soqlBox.value.trim();
+    const key = apiKeyBox.value.trim();
+
+    clearError();
+    if (!soql) { showError('Write a SOQL query first.'); return; }
+    if (!isSelectOnly(soql)) { showError('Only SELECT queries are allowed.'); return; }
+    if (!key) { showError('Enter your API key above.'); return; }
+
+    setLoading(true);
+    metaLine.textContent = 'Running…';
+    statusDot.className = 'status-dot';
+
+    const started = performance.now();
+    try {
+      const res = await fetch(`${API_BASE}/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': key },
+        body: JSON.stringify({ soql })
+      });
+
+      const data = await res.json();
+      const ms = Math.round(performance.now() - started);
+
+      if (!res.ok) {
+        statusDot.className = 'status-dot bad';
+        metaLine.textContent = `Failed in ${ms}ms`;
+        showError(data.error || `Request failed with status ${res.status}`);
+        resultsWrap.innerHTML = '<div class="placeholder">No results — see error above.</div>';
+        return;
+      }
+
+      statusDot.className = 'status-dot ok';
+      lastRecords = data.records || [];
+      metaLine.textContent = `${data.count} row${data.count === 1 ? '' : 's'} · ${ms}ms`;
+      if (data.truncated) {
+        showError(data.note || 'Preview truncated. Use Export for the full result set.');
+        errorBox.classList.remove('error');
+        errorBox.style.background = 'rgba(232,183,90,0.1)';
+        errorBox.style.borderColor = 'rgba(232,183,90,0.35)';
+        errorBox.style.color = '#F0CE8C';
+      }
+      renderTable(lastRecords);
+    } catch (err) {
+      statusDot.className = 'status-dot bad';
+      metaLine.textContent = 'Network error';
+      showError('Could not reach the API. Is the server running?');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  runBtn.onclick = runQuery;
+  soqlBox.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') runQuery();
+  });
+
+  async function loadAdminData() {
+    const apiKey = apiKeyBox.value.trim();
+    if (!apiKey) {
+      $('keysTableBody').innerHTML = `<tr><td colspan="6" class="placeholder" style="color:var(--danger)">Please enter your API Key to view Admin Data.</td></tr>`;
+      $('logsTableBody').innerHTML = `<tr><td colspan="7" class="placeholder" style="color:var(--danger)">Please enter your API Key to view Audit Logs.</td></tr>`;
+      return;
+    }
+
+    try {
+      // 1. Fetch Keys
+      const keysRes = await fetch(`${API_BASE}/admin/keys`, { headers: { 'x-api-key': apiKey } });
+      if (keysRes.ok) {
+        const { keys } = await keysRes.json();
+        $('keysTableBody').innerHTML = keys.map(k => `
+          <tr>
+            <td><b>${k.user_name}</b></td>
+            <td style="text-transform: capitalize;">${k.role}</td>
+            <td><code>${k.key_value}</code></td>
+            <td>
+              ${k.role === 'admin' 
+                ? `<span class="badge badge-active" style="background:rgba(79,209,197,0.15); color:var(--accent); border:1px solid rgba(79,209,197,0.3);">ALL (Master Admin)</span>`
+                : `<select onchange="updateKeyScopes(${k.id}, this.value)" style="background:var(--panel-alt); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-size:11px;">
+                    <option value="SELECT" ${k.scopes === 'SELECT' ? 'selected' : ''}>SELECT (Read Only)</option>
+                    <option value="SELECT,UPDATE" ${k.scopes === 'SELECT,UPDATE' ? 'selected' : ''}>SELECT + UPDATE</option>
+                    <option value="SELECT,INSERT,UPDATE" ${k.scopes === 'SELECT,INSERT,UPDATE' ? 'selected' : ''}>SELECT + INSERT + UPDATE</option>
+                    <option value="SELECT,INSERT,UPDATE,DELETE" ${k.scopes === 'SELECT,INSERT,UPDATE,DELETE' ? 'selected' : ''}>Full DML</option>
+                  </select>`
+              }
+            </td>
+            <td><span class="badge ${k.is_active ? 'badge-active' : 'badge-disabled'}">${k.is_active ? 'Active' : 'Disabled'}</span></td>
+            <td><button class="btn-ghost ${k.is_active ? 'btn-danger' : ''}" style="padding: 4px 8px; font-size: 11px;" onclick="toggleKey(${k.id})">${k.is_active ? 'Disable' : 'Enable'}</button></td>
+          </tr>
+        `).join('');
+      } else {
+        $('keysTableBody').innerHTML = `<tr><td colspan="6" class="placeholder" style="color:var(--danger)">Access Denied. Admin privileges required.</td></tr>`;
+      }
+
+      // 2. Fetch Logs (with pagination - STRICT ADMIN RESTRICTION)
+      const logsRes = await fetch(`${API_BASE}/admin/logs?limit=50&page=${currentLogPage}`, { headers: { 'x-api-key': apiKey } });
+      if (logsRes.ok) {
+        const data = await logsRes.json();
+        totalLogPages = data.totalPages;
+        $('pageIndicator').textContent = `Page ${data.page} of ${data.totalPages || 1}`;
+        
+        $('logsTableBody').innerHTML = data.logs.map(l => `
+          <tr>
+            <td>${new Date(l.created_at).toLocaleString()}</td>
+            <td>${l.user_name}</td>
+            <td>${l.endpoint}</td>
+            <td title="${l.soql}">${l.soql ? l.soql.slice(0, 40) + '...' : '-'}</td>
+            <td>${l.row_count || 0}</td>
+            <td>${l.execution_time_ms || 0} ms</td>
+            <td><span class="badge ${l.status_code === 200 ? 'badge-active' : 'badge-disabled'}">${l.status_code}</span></td>
+          </tr>
+        `).join('');
+      } else {
+        $('logsTableBody').innerHTML = `<tr><td colspan="7" class="placeholder" style="color:var(--danger)">Access Denied. Audit Logs are strictly restricted to Master Admin users.</td></tr>`;
+      }
+
+      // 3. Update Sync Status
+      checkSyncStatus();
+
+    } catch (e) {
+      console.error("Admin data fetch failed", e);
+    }
+  }
+
+  async function createApiKey() {
+    const user_name = $('newUserName').value.trim();
+    const role = $('newUserRole').value;
+    const scopes = $('newUserScopes').value;
+    const apiKey = apiKeyBox.value.trim();
+
+    if (!user_name) return alert('Please enter a user name.');
+
+    const res = await fetch(`${API_BASE}/admin/keys`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+      body: JSON.stringify({ user_name, role, scopes })
+    });
+
+    if (res.ok) {
+      $('newUserName').value = ''; // clear input
+      loadAdminData();
+    } else {
+      const data = await res.json().catch(()=>({}));
+      alert(data.error || 'Failed to create key. Admin privileges required.');
+    }
+  }
+
+  async function updateKeyScopes(id, scopes) {
+    const apiKey = apiKeyBox.value.trim();
+    const res = await fetch(`${API_BASE}/admin/keys/${id}/scopes`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+      body: JSON.stringify({ scopes })
+    });
+    
+    if (res.ok) {
+      loadAdminData();
+    } else {
+      const data = await res.json().catch(()=>({}));
+      alert(data.error || 'Failed to update key rights/scopes. Admin privileges required.');
+      loadAdminData();
+    }
+  }
+
+  async function toggleKey(id) {
+    const apiKey = apiKeyBox.value.trim();
+    const res = await fetch(`${API_BASE}/admin/keys/${id}/toggle`, {
+      method: 'PATCH',
+      headers: { 'x-api-key': apiKey }
+    });
+    
+    if (res.ok) loadAdminData();
+    else alert('Failed to update key status.');
+  }
+
+  // Health check on load
+  fetch(`${API_BASE}/health`).then(r => {
+    if (r.ok) { statusDot.className = 'status-dot ok'; metaLine.textContent = 'Server online — ready'; }
+  }).catch(() => { statusDot.className = 'status-dot bad'; metaLine.textContent = 'Server unreachable'; });
+  
+  let currentLogPage = 1;
+  let totalLogPages = 1;
+
+  // Initialize CodeMirror Editor
+  const editor = CodeMirror.fromTextArea($('soql'), {
+    mode: 'text/x-sql',
+    theme: 'material-ocean',
+    lineNumbers: true,
+    lineWrapping: true,
+    viewportMargin: Infinity
+  });
+  
+  // Keep the hidden textarea synced so existing logic works perfectly
+  editor.on('change', () => {
+    $('soql').value = editor.getValue();
+  });
+  
+  // Override the saved item click to update CodeMirror instead of just the textarea
+  function renderSavedQueries() {
+    const saved = getSavedQueries();
+    savedList.innerHTML = '';
+    savedEmpty.style.display = saved.length ? 'none' : 'block';
+    saved.forEach((q, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'saved-item';
+      btn.title = q;
+      btn.textContent = q.length > 40 ? q.slice(0, 40) + '…' : q;
+      btn.onclick = () => { editor.setValue(q); }; // Updated here
+      savedList.appendChild(btn);
+    });
+  }
+
+  // --- Sync Engine UI Logic ---
+  async function checkSyncStatus() {
+    const apiKey = apiKeyBox.value.trim();
+    const res = await fetch(`${API_BASE}/admin/sync/status`, { headers: { 'x-api-key': apiKey } });
+    if (res.ok) {
+      const data = await res.json();
+      $('syncTime').textContent = data.exists ? new Date(data.lastModified).toLocaleString('en-IN') : 'File not generated yet';
+    }
+  }
+
+  async function triggerSync() {
+    const apiKey = apiKeyBox.value.trim();
+    const btn = event.target;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-dark"></span> Syncing...';
+    
+    await fetch(`${API_BASE}/admin/sync/run`, { method: 'POST', headers: { 'x-api-key': apiKey } });
+    
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.textContent = 'Trigger Manual Sync';
+      checkSyncStatus();
+    }, 4000); // Give backend time to overwrite file before checking status
+  }
+
+  // --- Pagination Logic ---
+  function changeLogPage(direction) {
+    const newPage = currentLogPage + direction;
+    if (newPage > 0 && newPage <= totalLogPages) {
+      currentLogPage = newPage;
+      loadAdminData();
+    }
+  }
+
+</script>
+</body>
+</html>
