@@ -673,6 +673,37 @@ async function reassignTasksInSalesforce(taskUpdates) {
   return res;
 }
 
+const describeCache = {};
+
+/**
+ * Dynamically retrieves all queryable field names for an sObject from Salesforce REST API.
+ * Automatically filters out compound fields (address, location), base64 blobs, and deprecated/hidden fields.
+ * Caches results in memory to eliminate redundant API calls.
+ */
+async function describeSObject(accessToken, instanceUrl, sobjectName, forceRefresh = false) {
+  if (!forceRefresh && describeCache[sobjectName]) {
+    return describeCache[sobjectName];
+  }
+
+  const describeUri = `/services/data/v60.0/sobjects/${sobjectName}/describe`;
+  const meta = await fetchQueryBatch(accessToken, instanceUrl, describeUri);
+  if (!meta || !Array.isArray(meta.fields)) {
+    throw new Error(`Failed to describe sObject ${sobjectName}: No fields returned.`);
+  }
+
+  const queryableFields = meta.fields
+    .filter(f => {
+      if (f.type === 'address' || f.type === 'location' || f.type === 'base64') return false;
+      if (f.deprecatedAndHidden) return false;
+      if (sobjectName === 'Task' && f.name.startsWith('Recurrence')) return false;
+      return true;
+    })
+    .map(f => f.name);
+
+  describeCache[sobjectName] = queryableFields;
+  return queryableFields;
+}
+
 module.exports = {
   getOrgAuth,
   invalidateTokenCache,
@@ -688,5 +719,6 @@ module.exports = {
   executeSfDmlBulk,
   getSfOwnerMap,
   getSfOwnerIdByName,
-  reassignTasksInSalesforce
+  reassignTasksInSalesforce,
+  describeSObject
 };
