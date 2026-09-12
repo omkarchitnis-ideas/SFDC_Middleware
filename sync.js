@@ -17,7 +17,7 @@ if (syncDbDir && syncDbDir !== '.' && !fs.existsSync(syncDbDir)) {
 }
 
 // Configurable Cron Schedules
-const SYNC_CRON = process.env.SYNC_CRON || '*/2 * * * *';
+const SYNC_CRON = process.env.SYNC_CRON || '*/1 * * * *';
 const RECONCILIATION_CRON = process.env.RECONCILIATION_CRON || '0 */6 * * *';
 const ARCHIVE_CRON = process.env.ARCHIVE_CRON || '59 23 * * *';
 
@@ -423,6 +423,34 @@ async function syncSystemModes(accessToken, instanceUrl, accountIds) {
     }
 }
 
+async function syncCaseDelta(accessToken, instanceUrl, lastSyncTime) {
+    if (!lastSyncTime) return 0;
+    try {
+        const pgDb = require('./db-postgres');
+        const soql = `
+            SELECT 
+              Id, CaseNumber, AccountId, Account.Name, Account_Chain_Code__c,
+              ContactId, Contact.Name, OwnerId, Owner.Name, Status, Priority,
+              Reason, Product_Environment__c, Subject, Description,
+              CreatedDate, ClosedDate, LastModifiedDate, SystemModstamp 
+            FROM Case 
+            WHERE SystemModstamp >= ${lastSyncTime}
+            LIMIT 500
+        `;
+        const uriPath = `/services/data/v60.0/query?q=${encodeURIComponent(soql.trim())}`;
+        const data = await fetchQueryBatch(accessToken, instanceUrl, uriPath);
+        const caseRecords = data.records || [];
+        if (caseRecords.length > 0) {
+            await pgDb.upsertCasesBatch(caseRecords);
+            console.log(`[Postgres ODS Case Delta] Synced ${caseRecords.length} modified case(s) to sicsappsina6:5433.`);
+            return caseRecords.length;
+        }
+    } catch (err) {
+        console.warn(`[Postgres ODS Case Delta warning]: ${err.message}`);
+    }
+    return 0;
+}
+
 async function syncOnce(options = {}) {
     const isFullSync = typeof options === 'boolean' ? options : !!options.isFullSync;
     const startTime = Date.now();
@@ -448,6 +476,11 @@ async function syncOnce(options = {}) {
 
         if (records.length > 0) {
             newlyInsertedCareTasks = await processRecords(records);
+        }
+
+        // Sync modified cases to PostgreSQL on sicsappsina6:5433
+        if (!isFullSync && lastSync) {
+            await syncCaseDelta(accessToken, instanceUrl, lastSync);
         }
 
         // Fetch & sync System Mode for active accounts from Salesforce Order object
