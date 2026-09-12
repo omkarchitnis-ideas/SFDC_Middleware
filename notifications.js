@@ -625,6 +625,79 @@ async function notifySevereOverdueAlert(overdueTasks, webhookUrl = '') {
     return await sendTeamsWebhook(targetUrl, payload);
 }
 
+/**
+ * Formats and dispatches Middleware Alert Cards to MS Teams.
+ */
+const _sfdcAlertHistory = {};
+const SFDC_COOLDOWN_MS = 300000; // 5 mins
+
+async function notifyMiddlewareAlert(title, message, severity = 'INFO', details = {}, force = false) {
+    const middlewareUrl = process.env.TEAMS_MIDDLEWARE_WEBHOOK_URL || process.env.TEAMS_WEBHOOK_URL;
+    if (!middlewareUrl) return { success: false, message: 'No webhook URL configured' };
+
+    const alertKey = `SFDC:${title}:${severity}`;
+    const now = Date.now();
+    if (!force && _sfdcAlertHistory[alertKey] && (now - _sfdcAlertHistory[alertKey] < SFDC_COOLDOWN_MS)) {
+        return { success: true, message: 'Suppressed duplicate alert' };
+    }
+    _sfdcAlertHistory[alertKey] = now;
+
+    let color = 'Accent';
+    let emoji = 'ℹ️';
+    const sev = severity.toUpperCase();
+    if (sev === 'CRITICAL' || sev === 'ERROR') {
+        color = 'Attention';
+        emoji = '🔴';
+    } else if (sev === 'WARNING') {
+        color = 'Warning';
+        emoji = '🟡';
+    } else if (sev === 'SUCCESS') {
+        color = 'Good';
+        emoji = '🟢';
+    }
+
+    const timeStr = new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST';
+    const facts = [
+        { title: 'Service:', value: 'SFDC Middleware' },
+        { title: 'Severity:', value: sev },
+        { title: 'Timestamp:', value: timeStr }
+    ];
+    if (details && typeof details === 'object') {
+        for (const [k, v] of Object.entries(details)) {
+            facts.push({ title: `${k}:`, value: String(v) });
+        }
+    }
+
+    const body = [
+        {
+            type: 'Container',
+            items: [
+                {
+                    type: 'TextBlock',
+                    text: `${emoji} [SFDC Middleware] ${title}`,
+                    weight: 'Bolder',
+                    size: 'Medium',
+                    color: color
+                },
+                {
+                    type: 'TextBlock',
+                    text: message,
+                    wrap: true,
+                    spacing: 'Small'
+                }
+            ]
+        },
+        {
+            type: 'FactSet',
+            facts: facts,
+            spacing: 'Medium'
+        }
+    ];
+
+    const payload = buildAdaptiveCardMessage({ body, entities: [] });
+    return await sendTeamsWebhook(middlewareUrl, payload);
+}
+
 module.exports = {
     getWebhookUrls,
     getUserEmailMap,
@@ -634,7 +707,8 @@ module.exports = {
     notifyNewCareTasksAlert,
     notifyShiftSummaryAlert,
     notifyShiftStartAlert,
-    notifySevereOverdueAlert
+    notifySevereOverdueAlert,
+    notifyMiddlewareAlert
 };
 
 

@@ -26,6 +26,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const ExcelJS = require('exceljs');
 const { getOrgAuth, invalidateTokenCache, streamSoql, runSoql, isSelectOnly, flattenRecord, executeSfDmlSingle, executeSfDmlBulk, getSfOwnerIdByName, reassignTasksInSalesforce } = require('./sf-client');
+const { notifyMiddlewareAlert } = require('./notifications');
 
 const PORT = process.env.PORT || 4000;
 const API_KEY = process.env.API_KEY; // set this before starting the server
@@ -202,6 +203,7 @@ const handleRefreshSfdcToken = (req, res) => {
     console.log('[SFDC Middleware] Manual force token refresh requested...');
     const auth = getOrgAuth(true); // forceRefresh = true
     if (!auth || !auth.accessToken) {
+      notifyMiddlewareAlert('Token Refresh Failed', 'Unable to refresh Salesforce access token via direct SOAP auth.', 'CRITICAL', { Port: PORT, Org: process.env.ORG_ALIAS });
       return res.status(500).json({
         success: false,
         error: 'Failed to refresh Salesforce access token.'
