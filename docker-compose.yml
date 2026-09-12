@@ -1,22 +1,14 @@
 services:
   sfdc-middleware:
-    image: ideas-sas-api-api-server:latest
-    container_name: ideas-sfdc-middleware
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sfdc-middleware
     restart: always
     ports:
       - "4000:4000"
     env_file:
       - .env
     volumes:
-      - ./app.db:/app/app.db
       - ./salesforce_data.db:/app/salesforce_data.db
-      - ./acknowledged_alerts.json:/app/acknowledged_alerts.json
-      - ./shift_config.json:/app/shift_config.json
-      - ./leave_config.json:/app/leave_config.json
-      - ./imp_tasks_config.json:/app/imp_tasks_config.json
-      - ./teams_config.json:/app/teams_config.json
-      - ./api-server.js:/app/api-server.js
-      - ./sf-client.js:/app/sf-client.js
-      - ./db.js:/app/db.js
-      - ./sync.js:/app/sync.js
-      - ./public:/app/public
+      - ./app.db:/app/app.db
